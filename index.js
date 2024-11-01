@@ -2,11 +2,15 @@ import express from 'express';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
+import cors from 'cors'
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 8080;
+app.use(cors({
+  origin: '*',
+}));
 app.use(express.json());
 
 // Validación de las variables de entorno al inicio del script
