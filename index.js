@@ -73,7 +73,7 @@ async function verificarToken(req, res, next) {
 
 // Ruta para crear una cita y generar una reunión de Zoom
 app.post('/create-appointment', verificarToken, async (req, res) => {
-  const { userEmail, startTime } = req.body;
+  const { userEmail, startTime, userTimeZone } = req.body;
 
   if (!userEmail || !startTime || isNaN(new Date(startTime).getTime())) {
     return res.status(400).send({
@@ -104,6 +104,28 @@ app.post('/create-appointment', verificarToken, async (req, res) => {
     );
 
     const zoomLink = response.data.join_url;
+    const timeZone = userTimeZone || 'America/Guayaquil';
+
+    //Formaterar la fecha para el correo 
+    const fechaUTC =new Date(startTime);
+    const fechaLocal =  fechaUTC.toLocaleString('es-EC',{
+      timeZone: timeZone,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    //obtener diferencia horaria
+    const timeZoneOffset = new Date().toLocaleString('es-Ec',{
+      timeZone: timeZone,
+      timeZoneName: 'longOffset'
+    }).split('')[2];
+
+
     if (!zoomLink) {
       console.error('Error: No se recibió un enlace de Zoom en la respuesta');
       return res.status(500).send({ error: 'Error al crear la reunión de Zoom. No se recibió el enlace' });
@@ -115,8 +137,9 @@ app.post('/create-appointment', verificarToken, async (req, res) => {
       subject: 'Detalles de tu cita médica',
       html: `
         <h3>Tu cita ha sido agendada</h3>
-        <p>Fecha y Hora: ${new Date(startTime).toDateString()} a las ${new Date(startTime).toTimeString()}</p>
+        <p>Fecha y Hora: ${fechaLocal} (${timeZoneOffset})</p>
         <p>Link de la reunión: <a href="${zoomLink}">Unirse a la reunión de Zoom</a></p>
+        <p><strong>Convertidor horario:</strong> <a href="https://www.timeanddate.com/worldclock/converter.html?iso=${fechaUTC.toISOString().replace(/[:-]/g, '').split('.')[0]}&p1=1440" target="_blank">Ver en mi zona horaria</a></p>
       `,
     };
 
