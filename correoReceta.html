@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      color: #333;
+      background-color: #f9f9f9;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .header {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+    .reuma {
+      color: #aece57;
+    }
+    .sur {
+      color: #2a43d2;
+    }
+    .signature {
+      margin-top: 30px;
+      font-size: 14px;
+      color: #555;
+    }
+    .footer {
+      font-size: 12px;
+      color: #777;
+      border-top: 1px solid #eee;
+      margin-top: 30px;
+      padding-top: 10px;
+    }
+    a {
+      color: #2a43d2;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="reuma">Reuma</span><span class="sur">sur</span>
+    </div>
+
+    <p>Estimado/a <strong>{{nombrePaciente}}</strong>,</p>
+
+    <p>Adjunto a este correo encontrará su receta médica en formato PDF. Por favor, revise el documento cuidadosamente.</p>
+
+    <p>Si tiene alguna pregunta o necesita mayor información, no dude en comunicarse con nosotros.</p>
+
+    <br>
+
+    <p>Saludos cordiales,</p>
+
+    <div class="signature">
+      <strong>Reumasur</strong><br>
+      Centro Reumatológico<br>
+      Dir: Bocayá el Colón y Tarqui (Centro de Diagnóstico CEDIAG)<br>
+      Machala - El Oro, Ecuador<br>
+      Tel: 0980304357<br>
+      Email: <a href="mailto:emilio_aroca@yahoo.com">emilio_aroca@yahoo.com</a>
+    </div>
+
+    <div class="footer">
+      Este mensaje es confidencial y está dirigido únicamente al destinatario. Si ha recibido este mensaje por error, por favor elimínelo de inmediato y notifique al remitente.
+    </div>
+  </div>
+</body>
+</html>
