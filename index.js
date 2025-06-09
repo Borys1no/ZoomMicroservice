@@ -196,6 +196,127 @@ app.post("/create-appointment", verificarToken, async (req, res) => {
     res.status(500).send({ error: "Error al crear la reunión de Zoom." });
   }
 });
+
+//Endpoint para reagendar una cita
+app.post('/reschedule', verificarToken,  async (req, res) =>{
+  
+    const {appointmentId, originalZoomLink, newStartTime, userEmail, userTimeZone} = req.body;
+    if(!appointmentId || !originalZoomLink || !newStartTime || !userEmail || isNaN(new Date(newStartTime).getTime())) {
+      return res.status(400).send({
+        error: 'Faltan campos obligatorios o el formato de fecha es incorrecto. Se requieren: appointmentId, originalZoomLink, newStartTime (ISO 8601), userEmail'
+      });
+    }
+    try {
+      //Extraer el ID de la reunión de Zoom del enlace original
+      const meetingId = extractMeetingIdFromZoomLink(originalZoomLink);
+      if (!meetingId) {
+        return res.status(400).send({
+          error: 'El enlace de Zoom proporcionado no es válido o no contiene un ID de reunión.'
+        });
+      }
+      //Actualizar la reunión de Zoom con la nueva fecha y hora
+      const updatedMeeting = await updateZoomMeeting( meetingId, newStartTime, zoomToken);
+
+      //Preparar y enviar el correo de confirmación
+      const timeZone = userTimeZone || "America/Guayaquil";
+      const fechaUTC = new Date(newStartTime);
+      const fechaLocal = fechaUTC.toLocaleString("es-EC", {
+      timeZone: timeZone,
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    const timeZoneOffset = new Date()
+      .toLocaleString("es-EC", {
+        timeZone: timeZone,
+        timeZoneName: "longOffset",
+      })
+      .split(" ")[2];
+
+      const mailOptions ={
+        from: `"Cita Médica" <${process.env.EMAIL_SERVICE_USER}>`,
+        to: userEmail,
+        subject: "Reprogramación de tu cita médica",
+        html: `
+        <h3>Tu cita médica ha sido re-agendada</h3>
+        <p><strong>Nueva Fecha y Hora:</strong> ${fechaLocal} (${timeZoneOffset})</p>
+        <p>Link de la reunión: <a href="${updatedMeeting.join_url || originalZoomLink}">Unirse a la reunión de Zoom</a></p>
+        <p><strong>Convertidor horario:</strong> <a href="https://www.timeanddate.com/worldclock/converter.html?iso=${
+          fechaUTC.toISOString().replace(/[:-]/g, "").split(".")[0]
+        }&p1=1440" target="_blank">Ver en mi zona horaria</a></p>
+        <p>Si tienes alguna pregunta o necesitas asistencia, por favor contáctanos.</p>
+      `,
+    };
+    let mailSent = false;
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`Correo de re-agendamiento enviado a ${userEmail}`);
+      mailSent = true;
+    } catch (mailError) {
+      console.error(`Error al enviar el correo a ${userEmail}: `, mailError.message);
+    }
+    res.status(200).send({
+      message: mailSent
+        ? "Reunión re-agendada exitosamente y correo enviado."
+        : "Reunión re-agendada exitosamente, pero el correo no pudo ser enviado.",
+      zoomLink: updatedMeeting.join_url || originalZoomLink,
+      correoEnviado: mailSent,
+    });
+
+  } catch (error) {
+    console.error(" Error al reagendar la cita:",
+      error.response
+        ? `${error.response.status} - ${JSON.stringify(error.response.data)}`
+        : error.message
+    );
+    res.status(500).send({
+      error: "Error al reagendar la cita.",
+      detalle: error.message
+    });
+    
+  }
+});
+
+// Función auxiliar para extraer el ID de la reunión del enlace de Zoom
+function extractMeetingIdFromZoomLink(zoomLink) {
+  try {
+    const url = new URL(zoomLink);
+    const pathParts = url.pathname.split('/');
+    return pathParts[pathParts.length - 1];
+  } catch (e) {
+    console.error("Error al extraer meeting ID del enlace:", e);
+    return null;
+  }
+}
+
+// Función auxiliar para actualizar una reunión de Zoom
+async function updateZoomMeeting(meetingId, newStartTime, token) {
+  try {
+    const response = await axios.patch(
+      `https://api.zoom.us/v2/meetings/${meetingId}`,
+      {
+        start_time: new Date(newStartTime).toISOString(),
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error al actualizar reunión de Zoom:", error.response?.data || error.message);
+    throw error;
+  }
+}
+
+
 app.post("/enviar-receta", async (req, res) => {
 
   const { email, nombrePaciente, recetaPDFBase64 } = req.body;
