@@ -14,7 +14,7 @@ RUN npm install
 COPY . .
 
 # Expone el puerto 8080
-EXPOSE 8080
+EXPOSE ${PORT}
 
 # Comando para ejecutar la aplicación
 CMD ["node", "index.js"]
