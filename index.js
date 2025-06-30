@@ -13,7 +13,7 @@ app.use(
     origin: "*",
   })
 );
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "20mb" }));
 
 // Validación de las variables de entorno al inicio del script
 if (
