@@ -10,9 +10,15 @@ const app = express();
 const port = process.env.PORT || 3000;
 app.use(
   cors({
-    origin: "*",
+    origin: "https://reumasur.com",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+app.options("*", cors({
+  origin: "https://reumasur.com",
+  methods: ["GET", "POST", "OPTIONS"],
+}));
 app.use(express.json({ limit: "20mb" }));
 
 // Validación de las variables de entorno al inicio del script
@@ -142,7 +148,7 @@ app.post("/create-appointment", verificarToken, async (req, res) => {
         timeZone: timeZone,
         timeZoneName: "longOffset",
       })
-      .split("")[2];
+      .split(" ")[2];
 
     if (!zoomLink) {
       console.error("Error: No se recibió un enlace de Zoom en la respuesta");
