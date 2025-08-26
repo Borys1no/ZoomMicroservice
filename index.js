@@ -95,9 +95,9 @@ async function verificarToken(req, res, next) {
 
 // Ruta para crear una cita y generar una reunión de Zoom
 app.post("/create-appointment", verificarToken, async (req, res) => {
-  const { userEmail, startTime, userTimeZone } = req.body;
+  const { userEmail, starttime, userTimeZone } = req.body;
 
-  if (!userEmail || !startTime || isNaN(new Date(startTime).getTime())) {
+  if (!userEmail || !starttime || isNaN(new Date(starttime).getTime())) {
     return res.status(400).send({
       error:
         'Faltan campos obligatorios o el campo startTime tiene un formato no válido. Verifica userEmail y startTime (debe ser formato ISO 8601, ej: "2024-10-30T10:00:00Z").',
@@ -109,7 +109,7 @@ app.post("/create-appointment", verificarToken, async (req, res) => {
     const meetingDetails = {
       topic: "Cita Médica",
       type: 2,
-      start_time: new Date(startTime).toISOString(), // Convertir a ISO
+      start_time: new Date(starttime).toISOString(), // Convertir a ISO
       duration: 30, // Duración de la reunión en minutos
       timezone: "UTC",
     };
@@ -130,7 +130,7 @@ app.post("/create-appointment", verificarToken, async (req, res) => {
     const timeZone = userTimeZone || "America/Guayaquil";
 
     //Formaterar la fecha para el correo
-    const fechaUTC = new Date(startTime);
+    const fechaUTC = new Date(starttime);
     const fechaLocal = fechaUTC.toLocaleString("es-EC", {
       timeZone: timeZone,
       weekday: "long",
