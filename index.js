@@ -1,49 +1,72 @@
 import express from "express";
 import axios from "axios";
 import dotenv from "dotenv";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import cors from "cors";
+
 dotenv.config();
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;
+
 // CORS - ANTES de todo
-app.use(cors({
-  origin: ['https://reumasur.com', 'https://www.reumasur.com'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: ["https://reumasur.com", "https://www.reumasur.com"],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+
 // Responder preflight OPTIONS
-app.options('*', cors());
+app.options("*", cors());
+
 app.use(express.json({ limit: "20mb" }));
-// Validación de las variables de entorno al inicio del script
+
+// Validación de las variables de entorno
 if (
   !process.env.CLIENT_ID ||
   !process.env.CLIENT_SECRET ||
   !process.env.ACCOUNT_ID ||
-  !process.env.EMAIL_SERVICE_USER ||
-  !process.env.EMAIL_SERVICE_PASS
+  !process.env.RESEND_API_KEY
 ) {
   console.error(
     "Error: Faltan variables de entorno requeridas. Por favor verifica el archivo .env"
   );
-  process.exit(1);
 }
+
 let zoomToken = null;
 let tokenExpiryTime = null;
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_SERVICE_USER,
-    pass: process.env.EMAIL_SERVICE_PASS,
-  },
-});
 
-
-
-
-
-
+// Función mejorada para enviar correos con Resend
+async function enviarCorreoResend({ to, subject, html, attachments = [] }) {
+  console.log(`📧 Intentando enviar correo a: ${to}`);
+  console.log(`📧 Asunto: ${subject}`);
+  
+  try {
+    const { data, error } = await resend.emails.send({
+      from: "Reumasur <no-reply@reumasur.com>",
+      to: to,
+      subject: subject,
+      html: html,
+      attachments: attachments,
+    });
+    
+    if (error) {
+      console.error(`❌ Error de Resend API:`, error);
+      return { success: false, error: error };
+    }
+    
+    console.log(`✅ Correo enviado exitosamente a ${to}, ID: ${data?.id}`);
+    return { success: true, data };
+  } catch (exception) {
+    // Error de red o excepción inesperada
+    console.error(`❌ Excepción al enviar correo:`, exception);
+    return { success: false, error: exception.message };
+  }
+}
 
 async function obtenerTokenZoom() {
   try {
@@ -66,9 +89,9 @@ async function obtenerTokenZoom() {
     });
     zoomToken = response.data.access_token;
     tokenExpiryTime = Date.now() + response.data.expires_in * 1000;
-    console.log("Nuevo token generado");
+    console.log("✅ Nuevo token de Zoom generado");
   } catch (error) {
-    console.error("Error al obtener el token de Zoom:", error.message);
+    console.error("❌ Error al obtener el token de Zoom:", error.message);
     throw new Error(
       "Credenciales inválidas para obtener el token de Zoom. Verifica CLIENT_ID, CLIENT_SECRET y ACCOUNT_ID."
     );
@@ -77,17 +100,17 @@ async function obtenerTokenZoom() {
 
 async function verificarToken(req, res, next) {
   if (!zoomToken || Date.now() >= tokenExpiryTime) {
-    console.log("El token ha expirado o no existe, generando uno nuevo...");
+    console.log("🔄 El token ha expirado o no existe, generando uno nuevo...");
     try {
       await obtenerTokenZoom();
     } catch (error) {
-      console.error("Error al obtener el token de Zoom:", error.message);
+      console.error("❌ Error al obtener el token de Zoom:", error.message);
       return res
         .status(500)
         .send({ error: "Error al obtener el token de Zoom." });
     }
   } else {
-    console.log("Token valido, continuando...");
+    console.log("✅ Token valido, continuando...");
   }
   next();
 }
@@ -108,8 +131,8 @@ app.post("/create-appointment", verificarToken, async (req, res) => {
     const meetingDetails = {
       topic: "Cita Médica",
       type: 2,
-      start_time: new Date(starttime).toISOString(), // Convertir a ISO
-      duration: 30, // Duración de la reunión en minutos
+      start_time: starttime,
+      duration: 30,
       timezone: "UTC",
     };
 
@@ -128,7 +151,7 @@ app.post("/create-appointment", verificarToken, async (req, res) => {
     const zoomLink = response.data.join_url;
     const timeZone = userTimeZone || "America/Guayaquil";
 
-    //Formaterar la fecha para el correo
+    // Formatear la fecha para el correo
     const fechaUTC = new Date(starttime);
     const fechaLocal = fechaUTC.toLocaleString("es-EC", {
       timeZone: timeZone,
@@ -141,16 +164,16 @@ app.post("/create-appointment", verificarToken, async (req, res) => {
       hour12: true,
     });
 
-    //obtener diferencia horaria
+    // Obtener diferencia horaria
     const timeZoneOffset = new Date()
-      .toLocaleString("es-Ec", {
+      .toLocaleString("es-EC", {
         timeZone: timeZone,
         timeZoneName: "longOffset",
       })
       .split(" ")[2];
 
     if (!zoomLink) {
-      console.error("Error: No se recibió un enlace de Zoom en la respuesta");
+      console.error("❌ Error: No se recibió un enlace de Zoom en la respuesta");
       return res.status(500).send({
         error: "Error al crear la reunión de Zoom. No se recibió el enlace",
       });
@@ -240,39 +263,33 @@ app.post("/create-appointment", verificarToken, async (req, res) => {
         </div>
       </div>
     </body>
-    </html>
-    
+    </html>    
     `;
 
-    const mailOptions = {
-      from: `"Cita Médica" <${process.env.EMAIL_SERVICE_USER}>`,
+    // Usar la función mejorada de envío de correos
+    const resultadoCorreo = await enviarCorreoResend({
       to: userEmail,
       subject: "Detalles de tu cita médica",
       html: htmlPersonalizadoEnvioEnlace,
-    };
+    });
 
-    let mailSent = false;
-    try {
-      await transporter.sendMail(mailOptions);
-      console.log(`Correo enviado a ${userEmail} con el enlace de Zoom.`);
-      mailSent = true;
-    } catch (mailError) {
-      console.error(
-        `Error al enviar el correo a ${userEmail}: `,
-        mailError.message
-      );
+    if (resultadoCorreo.success) {
+      console.log(`✅ Correo enviado a ${userEmail} con el enlace de Zoom.`);
+    } else {
+      console.error(`❌ Error al enviar el correo a ${userEmail}:`, resultadoCorreo.error);
     }
 
     res.status(200).send({
-      message: mailSent
+      message: resultadoCorreo.success
         ? "Reunión creada exitosamente y correo enviado."
-        : "Reunión creada exitosamente, pero el correo no pudo ser enviado.",
+        : "Reunión creada exitosamente, pero el correo no pudo ser enviado. Verifica los logs para más detalles.",
       zoomLink,
-      correoEnviado: mailSent,
+      correoEnviado: resultadoCorreo.success,
+      errorCorreo: resultadoCorreo.success ? null : resultadoCorreo.error,
     });
   } catch (error) {
     console.error(
-      "Error al crear la reunión de Zoom: ",
+      "❌ Error al crear la reunión de Zoom: ",
       error.response
         ? `${error.response.status} - ${JSON.stringify(error.response.data)}`
         : error.message
@@ -281,7 +298,7 @@ app.post("/create-appointment", verificarToken, async (req, res) => {
   }
 });
 
-//Endpoint para reagendar una cita
+// Endpoint para reagendar una cita
 app.post("/reschedule", verificarToken, async (req, res) => {
   const {
     appointmentId,
@@ -290,6 +307,7 @@ app.post("/reschedule", verificarToken, async (req, res) => {
     userEmail,
     userTimeZone,
   } = req.body;
+  
   if (
     !appointmentId ||
     !originalZoomLink ||
@@ -302,8 +320,9 @@ app.post("/reschedule", verificarToken, async (req, res) => {
         "Faltan campos obligatorios o el formato de fecha es incorrecto. Se requieren: appointmentId, originalZoomLink, newStartTime (ISO 8601), userEmail",
     });
   }
+  
   try {
-    //Extraer el ID de la reunión de Zoom del enlace original
+    // Extraer el ID de la reunión de Zoom del enlace original
     const meetingId = extractMeetingIdFromZoomLink(originalZoomLink);
     if (!meetingId) {
       return res.status(400).send({
@@ -311,14 +330,15 @@ app.post("/reschedule", verificarToken, async (req, res) => {
           "El enlace de Zoom proporcionado no es válido o no contiene un ID de reunión.",
       });
     }
-    //Actualizar la reunión de Zoom con la nueva fecha y hora
+    
+    // Actualizar la reunión de Zoom con la nueva fecha y hora
     const updatedMeeting = await updateZoomMeeting(
       meetingId,
       newStartTime,
       zoomToken
     );
 
-    //Preparar y enviar el correo de confirmación
+    // Preparar y enviar el correo de confirmación
     const timeZone = userTimeZone || "America/Guayaquil";
     const fechaUTC = new Date(newStartTime);
     const fechaLocal = fechaUTC.toLocaleString("es-EC", {
@@ -427,33 +447,29 @@ app.post("/reschedule", verificarToken, async (req, res) => {
     </html>
       `;
 
-    const mailOptions = {
-      from: `"Cita Médica" <${process.env.EMAIL_SERVICE_USER}>`,
+    const resultadoCorreo = await enviarCorreoResend({
       to: userEmail,
       subject: "Reprogramación de tu cita médica",
       html: htmlPersonalizadoReagendar,
-    };
-    let mailSent = false;
-    try {
-      await transporter.sendMail(mailOptions);
-      console.log(`Correo de re-agendamiento enviado a ${userEmail}`);
-      mailSent = true;
-    } catch (mailError) {
-      console.error(
-        `Error al enviar el correo a ${userEmail}: `,
-        mailError.message
-      );
+    });
+
+    if (resultadoCorreo.success) {
+      console.log(`✅ Correo de re-agendamiento enviado a ${userEmail}`);
+    } else {
+      console.error(`❌ Error al enviar el correo a ${userEmail}:`, resultadoCorreo.error);
     }
+    
     res.status(200).send({
-      message: mailSent
+      message: resultadoCorreo.success
         ? "Reunión re-agendada exitosamente y correo enviado."
         : "Reunión re-agendada exitosamente, pero el correo no pudo ser enviado.",
       zoomLink: updatedMeeting.join_url || originalZoomLink,
-      correoEnviado: mailSent,
+      correoEnviado: resultadoCorreo.success,
+      errorCorreo: resultadoCorreo.success ? null : resultadoCorreo.error,
     });
   } catch (error) {
     console.error(
-      " Error al reagendar la cita:",
+      "❌ Error al reagendar la cita:",
       error.response
         ? `${error.response.status} - ${JSON.stringify(error.response.data)}`
         : error.message
@@ -472,7 +488,7 @@ function extractMeetingIdFromZoomLink(zoomLink) {
     const pathParts = url.pathname.split("/");
     return pathParts[pathParts.length - 1];
   } catch (e) {
-    console.error("Error al extraer meeting ID del enlace:", e);
+    console.error("❌ Error al extraer meeting ID del enlace:", e);
     return null;
   }
 }
@@ -495,13 +511,14 @@ async function updateZoomMeeting(meetingId, newStartTime, token) {
     return response.data;
   } catch (error) {
     console.error(
-      "Error al actualizar reunión de Zoom:",
+      "❌ Error al actualizar reunión de Zoom:",
       error.response?.data || error.message
     );
     throw error;
   }
 }
 
+// Endpoint para enviar receta médica
 app.post("/enviar-receta", async (req, res) => {
   const { email, nombrePaciente, recetaPDFBase64 } = req.body;
 
@@ -514,7 +531,7 @@ app.post("/enviar-receta", async (req, res) => {
   try {
     const pdfBuffer = Buffer.from(recetaPDFBase64, "base64");
 
-    //Plantilla HTML personalizada
+    // Plantilla HTML personalizada
     const htmlPersonalizado = `
     <!DOCTYPE html>
     <html>
@@ -597,10 +614,10 @@ app.post("/enviar-receta", async (req, res) => {
     </html>
     `;
 
-    const mailOptions = {
-      from: `"Receta Medica" <${process.env.EMAIL_SERVICE_USER}>`,
+    // Enviar correo con Resend y adjunto usando la función mejorada
+    const resultadoCorreo = await enviarCorreoResend({
       to: email,
-      subject: `Receta Medica de ${nombrePaciente}`,
+      subject: `Receta Médica de ${nombrePaciente}`,
       html: htmlPersonalizado,
       attachments: [
         {
@@ -609,13 +626,20 @@ app.post("/enviar-receta", async (req, res) => {
           contentType: "application/pdf",
         },
       ],
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log(`Receta enviada a ${email}`);
-    res.status(200).send({ message: "Receta enviada exitosamente." });
+    });
+    
+    if (resultadoCorreo.success) {
+      console.log(`✅ Receta enviada a ${email}`);
+      res.status(200).send({ message: "Receta enviada exitosamente." });
+    } else {
+      console.error(`❌ Error al enviar receta a ${email}:`, resultadoCorreo.error);
+      res.status(500).send({
+        error: "No se pudo enviar la receta.",
+        detalle: resultadoCorreo.error,
+      });
+    }
   } catch (error) {
-    console.error("Error al enviar la receta:", error);
+    console.error("❌ Error al enviar la receta:", error);
     res.status(500).send({
       error: "No se pudo enviar la receta.",
       detalle: error.message,
@@ -623,7 +647,27 @@ app.post("/enviar-receta", async (req, res) => {
   }
 });
 
+// Endpoint de prueba para diagnóstico de Resend
+app.get("/test-email", async (req, res) => {
+  const testEmail = req.query.email || "test@example.com";
+  
+  console.log(`🧪 Ejecutando prueba de envío de correo a: ${testEmail}`);
+  
+  const resultado = await enviarCorreoResend({
+    to: testEmail,
+    subject: "Prueba de diagnóstico Reumasur",
+    html: "<h1>Prueba de correo</h1><p>Si estás viendo esto, el sistema de correos funciona correctamente.</p>",
+  });
+  
+  res.json({
+    success: resultado.success,
+    details: resultado.success ? resultado.data : resultado.error,
+    email_enviado: testEmail
+  });
+});
+
 app.listen(port, () => {
-  console.log(`Servidor escuchando en http://localhost:${port}`);
-  console.log("Servicio listo para procesar solicitudes de creación de citas");
+  console.log(`✅ Servidor escuchando en http://localhost:${port}`);
+  console.log("✅ Servicio listo para procesar solicitudes de creación de citas");
+  console.log("📧 Sistema de correos configurado con Resend");
 });
