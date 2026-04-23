@@ -3,24 +3,19 @@ import axios from "axios";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import cors from "cors";
-
 dotenv.config();
-
 const app = express();
 const port = process.env.PORT || 3000;
-app.use(
-  cors({
-    origin: ["https://reumasur.com", "http://localhost:5173"],
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-app.options("*", cors({
-  origin: "https://reumasur.com",
-  methods: ["GET", "POST", "OPTIONS"],
+// CORS - ANTES de todo
+app.use(cors({
+  origin: ['https://reumasur.com', 'https://www.reumasur.com'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
+// Responder preflight OPTIONS
+app.options('*', cors());
 app.use(express.json({ limit: "20mb" }));
-
 // Validación de las variables de entorno al inicio del script
 if (
   !process.env.CLIENT_ID ||
@@ -34,10 +29,8 @@ if (
   );
   process.exit(1);
 }
-
 let zoomToken = null;
 let tokenExpiryTime = null;
-
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -45,6 +38,12 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_SERVICE_PASS,
   },
 });
+
+
+
+
+
+
 
 async function obtenerTokenZoom() {
   try {
